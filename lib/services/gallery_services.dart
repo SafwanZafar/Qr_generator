@@ -9,10 +9,8 @@ class GalleryService {
     try {
       final result = await SaverGallery.saveImage(
         bytes,
-        quality: 100,
-        name: 'QR_${DateTime.now().millisecondsSinceEpoch}',
-        androidRelativePath: 'Pictures/QRCodes',
-        androidExistNotSave: false,
+        fileName: 'QR_${DateTime.now().millisecondsSinceEpoch}',
+        skipIfExists: false,
       );
       return result.isSuccess;
     } catch (_) {
