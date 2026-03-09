@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:qr_code_generator/pages/generator/generator_page.dart';
+import 'package:qr_code_generator/pages/saved/save_page.dart';
 import 'package:qr_code_generator/pages/scanner/scanner_page.dart';
+import 'package:qr_code_generator/pages/template/template_page.dart';
 import '../core/theme.dart';
+import '../models/qr_config.dart';
 import 'home/home_page.dart';
 
 class MainPage extends StatefulWidget {
@@ -12,10 +15,24 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  int _index = 0;
+  int      _index          = 0;
+  int      _savedRefresh   = 0;   // ← forces SavedPage rebuild
+  QRConfig _selectedConfig = const QRConfig();
 
   void _goToGenerator() => setState(() => _index = 1);
   void _goToScanner()   => setState(() => _index = 2);
+
+  void _onTemplateApply(QRConfig config) {
+    setState(() {
+      _selectedConfig = config;
+      _index          = 1;
+    });
+  }
+
+  void _onQRGenerated() {
+    // called after QR is generated — refresh saved page
+    setState(() => _savedRefresh++);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,19 +41,30 @@ class _MainPageState extends State<MainPage> {
       body: IndexedStack(
         index: _index,
         children: [
-          HomePage(
+          HomePage(                              // 0 - Home
             onGenerate: _goToGenerator,
             onScan:     _goToScanner,
           ),
-          const QRGeneratorPage(),
-          const QRScannerPage(),
-          const _PlaceholderPage(label: 'Saved'),
-          const _PlaceholderPage(label: 'Profile'),
+          QRGeneratorPage(                       // 1 - Create
+            initialConfig:  _selectedConfig,
+            onQRGenerated:  _onQRGenerated,      // ← notify main
+          ),
+          const QRScannerPage(),                 // 2 - Scan
+          SavedPage(key: ValueKey(_savedRefresh)), // 3 - Saved
+          TemplatePage(                          // 4 - Templates
+            qrData:  'https://example.com',
+            onApply: _onTemplateApply,
+          ),
         ],
       ),
       bottomNavigationBar: _BottomNav(
         index: _index,
-        onTap:  (i) => setState(() => _index = i),
+        onTap: (i) {
+          setState(() {
+            _index = i;
+            if (i == 3) _savedRefresh++;  // ← also refresh on tab tap
+          });
+        },
       ),
     );
   }
@@ -53,7 +81,7 @@ class _PlaceholderPage extends StatelessWidget {
       body: Center(
         child: Text(label,
             style: const TextStyle(
-              color: AppTheme.kTextGray,
+              color:    AppTheme.kTextGray,
               fontSize: 18,
             )),
       ),
@@ -62,7 +90,7 @@ class _PlaceholderPage extends StatelessWidget {
 }
 
 class _BottomNav extends StatelessWidget {
-  final int index;
+  final int                index;
   final void Function(int) onTap;
 
   const _BottomNav({required this.index, required this.onTap});
@@ -74,9 +102,9 @@ class _BottomNav extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color:      Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
-            offset: const Offset(0, -4),
+            offset:     const Offset(0, -4),
           ),
         ],
       ),
@@ -85,11 +113,35 @@ class _BottomNav extends StatelessWidget {
           height: 64,
           child: Row(
             children: [
-              _NavItem(icon: Icons.home_rounded,             label: 'Home',      index: 0, current: index, onTap: onTap),
-              _NavItem(icon: Icons.dashboard_rounded,        label: 'Templates', index: 1, current: index, onTap: onTap),
+              _NavItem(
+                icon:    Icons.home_rounded,
+                label:   'Home',
+                index:   0,
+                current: index,
+                onTap:   onTap,
+              ),
+              _NavItem(
+                icon:    Icons.add_circle_outline_rounded,
+                label:   'Create',
+                index:   1,
+                current: index,
+                onTap:   onTap,
+              ),
               _ScanNavItem(onTap: () => onTap(2)),
-              _NavItem(icon: Icons.bookmark_rounded,         label: 'Saved',     index: 3, current: index, onTap: onTap),
-              _NavItem(icon: Icons.person_rounded,           label: 'Profile',   index: 4, current: index, onTap: onTap),
+              _NavItem(
+                icon:    Icons.bookmark_rounded,
+                label:   'Saved',
+                index:   3,
+                current: index,
+                onTap:   onTap,
+              ),
+              _NavItem(
+                icon:    Icons.dashboard_rounded,
+                label:   'Templates',
+                index:   4,
+                current: index,
+                onTap:   onTap,
+              ),
             ],
           ),
         ),
@@ -99,10 +151,10 @@ class _BottomNav extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final String   label;
-  final int      index;
-  final int      current;
+  final IconData           icon;
+  final String             label;
+  final int                index;
+  final int                current;
   final void Function(int) onTap;
 
   const _NavItem({
@@ -125,14 +177,14 @@ class _NavItem extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon,
-                  size: 22,
+                  size:  22,
                   color: selected
                       ? AppTheme.kPrimary
                       : AppTheme.kTextGray),
               const SizedBox(height: 4),
               Text(label,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize:   10,
                     fontWeight: selected
                         ? FontWeight.w600
                         : FontWeight.w400,
@@ -161,25 +213,32 @@ class _ScanNavItem extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 50,
+              width:  50,
               height: 50,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF4C4BE8), Color(0xFF9B4CE8)],
+                  colors: [
+                    Color(0xFF4C4BE8),
+                    Color(0xFF9B4CE8),
+                  ],
                   begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  end:   Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF4C4BE8).withValues(alpha: 0.4),
+                    color:      const Color(0xFF4C4BE8)
+                        .withValues(alpha: 0.4),
                     blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    offset:     const Offset(0, 4),
                   ),
                 ],
               ),
-              child: const Icon(Icons.qr_code_scanner_rounded,
-                  color: Colors.white, size: 24),
+              child: const Icon(
+                Icons.qr_code_scanner_rounded,
+                color: Colors.white,
+                size:  24,
+              ),
             ),
           ],
         ),
