@@ -43,7 +43,7 @@ class _MainPageState extends State<MainPage> {
         children: [
           HomePage(                              // 0 - Home
             onGenerate: _goToGenerator,
-            onScan:     _goToScanner,
+            onScan:     _goToScanner, onMyCodes: () {  },
           ),
           QRGeneratorPage(                       // 1 - Create
             initialConfig:  _selectedConfig,

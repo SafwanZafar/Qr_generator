@@ -3,22 +3,27 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/theme.dart';
 import '../../models/qr_config.dart';
+import '../../providers/customize_provider.dart';
 import '../../services/gallery_services.dart';
 import '../../services/share_services.dart';
 import '../pages/customize/customize_screen.dart';
+import '../services/history_service.dart';
 
 class ResultPage extends StatefulWidget {
-  final String       qrData;
-  final Color        color;
-  final IconData     icon;
-  final String       label;
-  final QRConfig     config;
+  final String                  historyId;      // ← ADD
+  final String                  qrData;
+  final Color                   color;
+  final IconData                icon;
+  final String                  label;
+  final QRConfig                config;
   final void Function(QRConfig) onConfigChanged;
 
   const ResultPage({
+    required this.historyId,      // ← ADD
     super.key,
     required this.qrData,
     required this.color,
@@ -33,16 +38,24 @@ class ResultPage extends StatefulWidget {
 }
 
 class _ResultPageState extends State<ResultPage> {
-  final GlobalKey _qrKey = GlobalKey();
-  late QRConfig   _config;
-  bool _saving  = false;
-  bool _sharing = false;
+  final GlobalKey _qrKey  = GlobalKey();
+  bool            _saving  = false;
+  bool            _sharing = false;
+  bool            _bookmarked = false;  // ← ADD
+
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    _config = widget.config;
+    // load initial config into CustomizeProvider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CustomizeProvider>().loadConfig(widget.config);
+    });
   }
+
+  // ── Title ──────────────────────────────────────────────────────────────────
 
   String get _title => switch (widget.label) {
     'URL'      => 'My Website QR',
@@ -57,6 +70,8 @@ class _ResultPageState extends State<ResultPage> {
     _          => 'My QR Code',
   };
 
+  // ── Capture ────────────────────────────────────────────────────────────────
+
   Future<Uint8List?> _capture() async {
     try {
       final boundary = _qrKey.currentContext!
@@ -69,6 +84,16 @@ class _ResultPageState extends State<ResultPage> {
       return null;
     }
   }
+
+  // ----history ----------------
+
+  Future<void> _bookmark() async {
+    await HistoryService.toggleBookmark(widget.historyId);
+    setState(() => _bookmarked = !_bookmarked);
+    _snack(_bookmarked ? 'Bookmarked!' : 'Bookmark removed');
+  }
+
+  // ── Save ───────────────────────────────────────────────────────────────────
 
   Future<void> _save() async {
     if (_saving) return;
@@ -86,6 +111,8 @@ class _ResultPageState extends State<ResultPage> {
     }
   }
 
+  // ── Share ──────────────────────────────────────────────────────────────────
+
   Future<void> _share() async {
     if (_sharing) return;
     setState(() => _sharing = true);
@@ -100,21 +127,29 @@ class _ResultPageState extends State<ResultPage> {
     }
   }
 
+  // ── Customize ──────────────────────────────────────────────────────────────
+
   void _customize() {
+    final currentConfig = context.read<CustomizeProvider>().config;
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CustomizePage(
-          qrData:    widget.qrData,
-          config:    _config,
-          onChanged: (c) {
-            setState(() => _config = c);
-            widget.onConfigChanged(c);
-          },
+        builder: (_) => ChangeNotifierProvider.value(
+          value: context.read<CustomizeProvider>(),
+          child: CustomizePage(
+            qrData:    widget.qrData,
+            config:    currentConfig,
+            onChanged: (c) {
+              context.read<CustomizeProvider>().loadConfig(c);
+              widget.onConfigChanged(c);
+            },
+          ),
         ),
       ),
     );
   }
+
+  // ── Snack ──────────────────────────────────────────────────────────────────
 
   void _snack(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -139,12 +174,17 @@ class _ResultPageState extends State<ResultPage> {
     ));
   }
 
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
+    // only watch config from provider
+    final config = context.watch<CustomizeProvider>().config;
+
     return Scaffold(
       backgroundColor: AppTheme.kBgColor,
 
-      // ── AppBar ──────────────────────────────────────────────────
+      // ── AppBar ─────────────────────────────────────────────────────
       appBar: AppBar(
         backgroundColor:       AppTheme.kBgColor,
         elevation:              0,
@@ -170,7 +210,7 @@ class _ResultPageState extends State<ResultPage> {
             )),
       ),
 
-      // ── Body ────────────────────────────────────────────────────
+      // ── Body ───────────────────────────────────────────────────────
       body: Column(
         children: [
 
@@ -179,9 +219,9 @@ class _ResultPageState extends State<ResultPage> {
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               child: Column(children: [
 
-                // ── QR Card ───────────────────────────────────────
+                // ── QR Card ──────────────────────────────────────────
                 Container(
-                  width:  double.infinity,
+                  width: double.infinity,
                   decoration: BoxDecoration(
                     color:        AppTheme.kCardColor,
                     borderRadius: BorderRadius.circular(20),
@@ -197,15 +237,14 @@ class _ResultPageState extends State<ResultPage> {
 
                     // QR preview
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                          24, 28, 24, 0),
+                      padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
                       child: RepaintBoundary(
                         key: _qrKey,
                         child: Container(
                           width:   double.infinity,
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color:        _config.backgroundColor,
+                            color:        config.backgroundColor,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: AppTheme.kBorderColor,
@@ -214,31 +253,26 @@ class _ResultPageState extends State<ResultPage> {
                           ),
                           child: Center(
                             child: QrImageView(
-                              data:    widget.qrData,
-                              version: QrVersions.auto,
-                              size:    220,
-                              backgroundColor:
-                              _config.backgroundColor,
-                              errorCorrectionLevel:
-                              QrErrorCorrectLevel.H,
+                              data:                widget.qrData,
+                              version:             QrVersions.auto,
+                              size:                220,
+                              backgroundColor:     config.backgroundColor,
+                              errorCorrectionLevel: QrErrorCorrectLevel.H,
                               eyeStyle: QrEyeStyle(
                                 eyeShape: QrEyeShape.square,
-                                color:    _config.foregroundColor,
+                                color:    config.foregroundColor,
                               ),
                               dataModuleStyle: QrDataModuleStyle(
-                                dataModuleShape:
-                                QrDataModuleShape.square,
-                                color: _config.foregroundColor,
+                                dataModuleShape: QrDataModuleShape.square,
+                                color:           config.foregroundColor,
                               ),
-                              embeddedImage: _config.logoPath != null
-                                  ? FileImage(
-                                  File(_config.logoPath!))
+                              embeddedImage: config.logoPath != null
+                                  ? FileImage(File(config.logoPath!))
                                   : null,
-                              embeddedImageStyle:
-                              QrEmbeddedImageStyle(
+                              embeddedImageStyle: QrEmbeddedImageStyle(
                                 size: Size(
-                                  220 * _config.logoSize,
-                                  220 * _config.logoSize,
+                                  220 * config.logoSize,
+                                  220 * config.logoSize,
                                 ),
                               ),
                             ),
@@ -251,8 +285,7 @@ class _ResultPageState extends State<ResultPage> {
 
                     // Title + data
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24),
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Column(children: [
                         Text(_title,
                             style: const TextStyle(
@@ -278,11 +311,9 @@ class _ResultPageState extends State<ResultPage> {
 
                     // Action buttons
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24),
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Row(
-                        mainAxisAlignment:
-                        MainAxisAlignment.spaceEvenly,
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           _CircleAction(
                             icon:    Icons.share_rounded,
@@ -305,14 +336,13 @@ class _ResultPageState extends State<ResultPage> {
                             label: 'Bookmark',
                             color: const Color(0xFFE84C4C),
                             bg:    const Color(0xFFFFEEEE),
-                            onTap: _save,
+                            onTap: _bookmark,
                           ),
                           _CircleAction(
                             icon:  Icons.palette_rounded,
                             label: 'Customize',
                             color: widget.color,
-                            bg:    widget.color
-                                .withValues(alpha: 0.12),
+                            bg:    widget.color.withValues(alpha: 0.12),
                             onTap: _customize,
                           ),
                         ],
@@ -326,7 +356,7 @@ class _ResultPageState extends State<ResultPage> {
             ),
           ),
 
-          // ── Bottom create new button ─────────────────────────────
+          // ── Bottom button ───────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
             child: SizedBox(

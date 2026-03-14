@@ -22,6 +22,9 @@ dependencies:
   flutter_bloc: ^8.1.6
   equatable: ^2.0.5
   shared_preferences: ^2.3.2
+  provider: ^6.1.5+1
+  flutter_native_splash: ^2.4.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -34,5 +37,16 @@ flutter_launcher_icons:
   image_path: "assets/Icons/icon.png"
   min_sdk_android: 21
 
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/logo/native_logo.jpeg
+  android_12:
+    image: assets/logo/native_logo.jpeg
+    color: "#FFFFFF"
+  web: false
+
 flutter:
   uses-material-design: true
+  assets:
+    - assets/Icons/
+    - assets/logo/

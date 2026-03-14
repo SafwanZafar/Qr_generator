@@ -21,7 +21,7 @@
     </queries>
 
     <application
-        android:label="qr_code_generator"
+        android:label="QRCraft"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true">

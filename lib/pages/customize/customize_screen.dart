@@ -1,14 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/theme.dart';
 import '../../models/qr_config.dart';
+import '../../providers/customize_provider.dart';
 
 class CustomizePage extends StatefulWidget {
-  final String   qrData;
-  final QRConfig config;
-  final void Function(QRConfig) onChanged;
+  final String                   qrData;
+  final QRConfig                 config;
+  final void Function(QRConfig)  onChanged;
 
   const CustomizePage({
     super.key,
@@ -22,16 +24,14 @@ class CustomizePage extends StatefulWidget {
 }
 
 class _CustomizePageState extends State<CustomizePage> {
-  late QRConfig _config;
 
-  // preset colors
   static const _colors = [
-    Color(0xFF3B5BDB),  // blue
-    Color(0xFFE03131),  // red
-    Color(0xFF2F9E44),  // green
-    Color(0xFF1A1A2E),  // dark
-    Color(0xFFE67700),  // orange
-    Color(0xFF7048E8),  // purple
+    Color(0xFF3B5BDB),
+    Color(0xFFE03131),
+    Color(0xFF2F9E44),
+    Color(0xFF1A1A2E),
+    Color(0xFFE67700),
+    Color(0xFF7048E8),
   ];
 
   static const _styles = [
@@ -41,73 +41,91 @@ class _CustomizePageState extends State<CustomizePage> {
     _StyleItem(label: 'Classy',  style: QRStyle.classy),
   ];
 
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
   @override
   void initState() {
     super.initState();
-    _config = widget.config;
+    // load initial config into provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CustomizeProvider>().loadConfig(widget.config);
+    });
   }
 
-  void _update(QRConfig c) {
-    setState(() => _config = c);
-    widget.onChanged(c);
-  }
+  // ── Actions ────────────────────────────────────────────────────────────────
 
   Future<void> _pickLogo() async {
     final picker = ImagePicker();
     final file   = await picker.pickImage(source: ImageSource.gallery);
     if (file == null) return;
-    _update(_config.copyWith(logoPath: file.path));
+    if (mounted) {
+      context.read<CustomizeProvider>().updateLogo(file.path);
+      widget.onChanged(context.read<CustomizeProvider>().config);
+    }
   }
 
-  void _removeLogo() => _update(_config.copyWith(clearLogo: true));
+  void _removeLogo() {
+    context.read<CustomizeProvider>().updateLogo(null);
+    widget.onChanged(context.read<CustomizeProvider>().config);
+  }
 
-  // get eye style based on QRStyle
-  QrEyeStyle _eyeStyle() {
-    switch (_config.style) {
+  void _reset() {
+    context.read<CustomizeProvider>().reset();
+    widget.onChanged(context.read<CustomizeProvider>().config);
+  }
+
+  void _apply() {
+    widget.onChanged(context.read<CustomizeProvider>().config);
+    Navigator.pop(context);
+  }
+
+  // ── Eye & module style ─────────────────────────────────────────────────────
+
+  QrEyeStyle _eyeStyle(QRConfig config) {
+    switch (config.style) {
       case QRStyle.rounded:
         return QrEyeStyle(
           eyeShape: QrEyeShape.circle,
-          color:    _config.foregroundColor,
+          color:    config.foregroundColor,
         );
       default:
         return QrEyeStyle(
           eyeShape: QrEyeShape.square,
-          color:    _config.foregroundColor,
+          color:    config.foregroundColor,
         );
     }
   }
 
-  // get data module style based on QRStyle
-  QrDataModuleStyle _moduleStyle() {
-    switch (_config.style) {
+  QrDataModuleStyle _moduleStyle(QRConfig config) {
+    switch (config.style) {
       case QRStyle.rounded:
-        return QrDataModuleStyle(
-          dataModuleShape: QrDataModuleShape.circle,
-          color:           _config.foregroundColor,
-        );
       case QRStyle.dots:
         return QrDataModuleStyle(
           dataModuleShape: QrDataModuleShape.circle,
-          color:           _config.foregroundColor,
+          color:           config.foregroundColor,
         );
       default:
         return QrDataModuleStyle(
           dataModuleShape: QrDataModuleShape.square,
-          color:           _config.foregroundColor,
+          color:           config.foregroundColor,
         );
     }
   }
 
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
+    final config = context.watch<CustomizeProvider>().config;
+
     return Scaffold(
       backgroundColor: AppTheme.kBgColor,
 
       // ── AppBar ─────────────────────────────────────────────────────
       appBar: AppBar(
-        backgroundColor:        AppTheme.kBgColor,
-        elevation:               0,
-        scrolledUnderElevation:  0,
+        backgroundColor:       AppTheme.kBgColor,
+        elevation:              0,
+        scrolledUnderElevation: 0,
         leading: GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Container(
@@ -128,9 +146,8 @@ class _CustomizePageState extends State<CustomizePage> {
               fontWeight: FontWeight.w700,
             )),
         actions: [
-          // Reset button
           GestureDetector(
-            onTap: () => _update(const QRConfig()),
+            onTap: _reset,
             child: Container(
               margin: const EdgeInsets.only(right: 16),
               padding: const EdgeInsets.symmetric(
@@ -150,14 +167,13 @@ class _CustomizePageState extends State<CustomizePage> {
         ],
       ),
 
-      // ── Body ───────────────────────────────────────────────────────
       body: Column(
         children: [
 
           // ── QR Preview ─────────────────────────────────────────────
           Container(
-            width:  double.infinity,
-            color:  AppTheme.kBgColor,
+            width:   double.infinity,
+            color:   AppTheme.kBgColor,
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Center(
               child: Container(
@@ -165,7 +181,7 @@ class _CustomizePageState extends State<CustomizePage> {
                 height:  200,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color:        _config.backgroundColor,
+                  color:        config.backgroundColor,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: AppTheme.kBorderColor,
@@ -185,16 +201,16 @@ class _CustomizePageState extends State<CustomizePage> {
                       : widget.qrData,
                   version:         QrVersions.auto,
                   size:            168,
-                  backgroundColor: _config.backgroundColor,
-                  eyeStyle:        _eyeStyle(),
-                  dataModuleStyle: _moduleStyle(),
-                  embeddedImage: _config.logoPath != null
-                      ? FileImage(File(_config.logoPath!))
+                  backgroundColor: config.backgroundColor,
+                  eyeStyle:        _eyeStyle(config),
+                  dataModuleStyle: _moduleStyle(config),
+                  embeddedImage: config.logoPath != null
+                      ? FileImage(File(config.logoPath!))
                       : null,
                   embeddedImageStyle: QrEmbeddedImageStyle(
                     size: Size(
-                      168 * _config.logoSize,
-                      168 * _config.logoSize,
+                      168 * config.logoSize,
+                      168 * config.logoSize,
                     ),
                   ),
                 ),
@@ -235,15 +251,16 @@ class _CustomizePageState extends State<CustomizePage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: _colors.map((color) {
-                        final selected =
-                            _config.foregroundColor == color;
+                        final selected = config.foregroundColor == color;
                         return GestureDetector(
-                          onTap: () => _update(
-                              _config.copyWith(
-                                  foregroundColor: color)),
+                          onTap: () {
+                            context.read<CustomizeProvider>()
+                                .updateColor(color);
+                            widget.onChanged(
+                                context.read<CustomizeProvider>().config);
+                          },
                           child: AnimatedContainer(
-                            duration: const Duration(
-                                milliseconds: 200),
+                            duration: const Duration(milliseconds: 200),
                             width:  48,
                             height: 48,
                             decoration: BoxDecoration(
@@ -265,11 +282,8 @@ class _CustomizePageState extends State<CustomizePage> {
                                   : [],
                             ),
                             child: selected
-                                ? const Icon(
-                              Icons.check_rounded,
-                              color: Colors.white,
-                              size:  22,
-                            )
+                                ? const Icon(Icons.check_rounded,
+                                color: Colors.white, size: 22)
                                 : null,
                           ),
                         );
@@ -277,9 +291,7 @@ class _CustomizePageState extends State<CustomizePage> {
                     ),
 
                     const SizedBox(height: 28),
-                    Divider(
-                        color: AppTheme.kBorderColor,
-                        height: 1),
+                    Divider(color: AppTheme.kBorderColor, height: 1),
                     const SizedBox(height: 28),
 
                     // ── Style ────────────────────────────────────────
@@ -295,14 +307,16 @@ class _CustomizePageState extends State<CustomizePage> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: _styles.map((item) {
-                          final selected =
-                              _config.style == item.style;
+                          final selected = config.style == item.style;
                           return GestureDetector(
-                            onTap: () => _update(
-                                _config.copyWith(style: item.style)),
+                            onTap: () {
+                              context.read<CustomizeProvider>()
+                                  .updateStyle(item.style);
+                              widget.onChanged(
+                                  context.read<CustomizeProvider>().config);
+                            },
                             child: AnimatedContainer(
-                              duration: const Duration(
-                                  milliseconds: 200),
+                              duration: const Duration(milliseconds: 200),
                               margin: const EdgeInsets.only(right: 10),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 20, vertical: 10),
@@ -310,8 +324,7 @@ class _CustomizePageState extends State<CustomizePage> {
                                 color: selected
                                     ? AppTheme.kPrimary
                                     : AppTheme.kBgColor,
-                                borderRadius:
-                                BorderRadius.circular(20),
+                                borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
                                   color: selected
                                       ? AppTheme.kPrimary
@@ -335,9 +348,7 @@ class _CustomizePageState extends State<CustomizePage> {
                     ),
 
                     const SizedBox(height: 28),
-                    Divider(
-                        color: AppTheme.kBorderColor,
-                        height: 1),
+                    Divider(color: AppTheme.kBorderColor, height: 1),
                     const SizedBox(height: 28),
 
                     // ── Add Logo ─────────────────────────────────────
@@ -349,21 +360,19 @@ class _CustomizePageState extends State<CustomizePage> {
                         )),
                     const SizedBox(height: 16),
 
-                    if (_config.logoPath != null) ...[
-                      // Logo preview
+                    if (config.logoPath != null) ...[
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color:        AppTheme.kBgColor,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                              color: AppTheme.kBorderColor),
+                          border: Border.all(color: AppTheme.kBorderColor),
                         ),
                         child: Row(children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.file(
-                              File(_config.logoPath!),
+                              File(config.logoPath!),
                               width:  50,
                               height: 50,
                               fit:    BoxFit.cover,
@@ -372,8 +381,7 @@ class _CustomizePageState extends State<CustomizePage> {
                           const SizedBox(width: 14),
                           Expanded(
                             child: Column(
-                              crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text('Logo added',
                                     style: TextStyle(
@@ -396,9 +404,8 @@ class _CustomizePageState extends State<CustomizePage> {
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFFEEEE),
-                                borderRadius:
-                                BorderRadius.circular(8),
+                                color:        const Color(0xFFFFEEEE),
+                                borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Icon(
                                   Icons.delete_outline_rounded,
@@ -421,40 +428,41 @@ class _CustomizePageState extends State<CustomizePage> {
                         Expanded(
                           child: SliderTheme(
                             data: SliderThemeData(
-                              trackHeight:  2,
-                              thumbShape:   const RoundSliderThumbShape(
+                              trackHeight:       2,
+                              thumbShape:        const RoundSliderThumbShape(
                                   enabledThumbRadius: 8),
-                              overlayShape: const RoundSliderOverlayShape(
+                              overlayShape:      const RoundSliderOverlayShape(
                                   overlayRadius: 16),
-                              activeTrackColor:   AppTheme.kPrimary,
+                              activeTrackColor:  AppTheme.kPrimary,
                               inactiveTrackColor: AppTheme.kBorderColor,
-                              thumbColor:         AppTheme.kPrimary,
+                              thumbColor:        AppTheme.kPrimary,
                               overlayColor: AppTheme.kPrimary
                                   .withValues(alpha: 0.2),
                             ),
                             child: GestureDetector(
                               onHorizontalDragUpdate: (_) {},
                               child: Slider(
-                                value:    _config.logoSize,
+                                value:    config.logoSize,
                                 min:      0.1,
                                 max:      0.35,
-                                onChanged: (v) => _update(
-                                    _config.copyWith(logoSize: v)),
+                                onChanged: (v) {
+                                  context.read<CustomizeProvider>()
+                                      .updateLogoSize(v);
+                                  widget.onChanged(
+                                      context.read<CustomizeProvider>().config);
+                                },
                               ),
                             ),
                           ),
                         ),
-                        Text(
-                          '${(_config.logoSize * 100).toInt()}%',
-                          style: const TextStyle(
-                            color:    AppTheme.kTextGray,
-                            fontSize: 13,
-                          ),
-                        ),
+                        Text('${(config.logoSize * 100).toInt()}%',
+                            style: const TextStyle(
+                              color:    AppTheme.kTextGray,
+                              fontSize: 13,
+                            )),
                       ]),
 
                     ] else ...[
-                      // Upload box
                       GestureDetector(
                         onTap: _pickLogo,
                         child: Container(
@@ -465,12 +473,10 @@ class _CustomizePageState extends State<CustomizePage> {
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color: AppTheme.kBorderColor,
-                              style: BorderStyle.solid,
                             ),
                           ),
                           child: Column(
-                            mainAxisAlignment:
-                            MainAxisAlignment.center,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Container(
                                 width:  48,
@@ -478,13 +484,10 @@ class _CustomizePageState extends State<CustomizePage> {
                                 decoration: BoxDecoration(
                                   color: AppTheme.kPrimary
                                       .withValues(alpha: 0.1),
-                                  borderRadius:
-                                  BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Icon(
-                                    Icons.image_outlined,
-                                    color: AppTheme.kPrimary,
-                                    size:  24),
+                                child: const Icon(Icons.image_outlined,
+                                    color: AppTheme.kPrimary, size: 24),
                               ),
                               const SizedBox(height: 10),
                               const Text('Tap to upload logo',
@@ -512,7 +515,7 @@ class _CustomizePageState extends State<CustomizePage> {
                       width:  double.infinity,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: _apply,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.kPrimary,
                           foregroundColor: Colors.white,
@@ -542,7 +545,7 @@ class _CustomizePageState extends State<CustomizePage> {
 // ── Style item ────────────────────────────────────────────────────────────────
 
 class _StyleItem {
-  final String   label;
-  final QRStyle  style;
+  final String  label;
+  final QRStyle style;
   const _StyleItem({required this.label, required this.style});
 }

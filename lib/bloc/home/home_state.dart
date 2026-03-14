@@ -17,9 +17,17 @@ class HomeLoading extends HomeState {
 
 class HomeLoaded extends HomeState {
   final List<QRHistory> history;
-  const HomeLoaded({required this.history});
+  final List<QRHistory> filtered;
+  final String          searchQuery;
+
+  HomeLoaded({
+    required this.history,
+    List<QRHistory>?  filtered,      // ← nullable
+    this.searchQuery = '',
+  }) : filtered = filtered ?? history; // ← default = history
+
   @override
-  List<Object?> get props => [history];
+  List<Object?> get props => [history, filtered, searchQuery];
 }
 
 class HomeError extends HomeState {

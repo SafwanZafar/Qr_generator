@@ -18,7 +18,6 @@ class HistoryService {
     final prefs = await SharedPreferences.getInstance();
     final list  = prefs.getStringList(_key) ?? [];
     list.insert(0, item.toJson());
-    // keep only last 50
     if (list.length > 50) list.removeLast();
     await prefs.setStringList(_key, list);
   }
@@ -31,6 +30,27 @@ class HistoryService {
       return map['id'] == id;
     });
     await prefs.setStringList(_key, list);
+  }
+
+  // ── Bookmark toggle ──────────────────────────────────────────
+  static Future<void> toggleBookmark(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list  = prefs.getStringList(_key) ?? [];
+    final updated = list.map((e) {
+      final map = jsonDecode(e) as Map<String, dynamic>;
+      if (map['id'] == id) {
+        map['isBookmarked'] = !(map['isBookmarked'] ?? false);
+        return jsonEncode(map);
+      }
+      return e;
+    }).toList();
+    await prefs.setStringList(_key, updated);
+  }
+
+  // ── Load only bookmarked ─────────────────────────────────────
+  static Future<List<QRHistory>> loadBookmarked() async {
+    final all = await load();
+    return all.where((e) => e.isBookmarked).toList();
   }
 
   static Future<void> clearAll() async {

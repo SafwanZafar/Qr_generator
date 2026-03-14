@@ -8,6 +8,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<HomeLoadEvent>(_onLoad);
     on<HomeDeleteHistoryEvent>(_onDelete);
     on<HomeClearHistoryEvent>(_onClear);
+    on<HomeSearchEvent>(_onSearch);  // ← ADD
   }
 
   Future<void> _onLoad(
@@ -17,7 +18,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     emit(const HomeLoading());
     try {
       final history = await HistoryService.load();
-      emit(HomeLoaded(history: history));
+      emit(HomeLoaded(
+        history:  history,
+        filtered: history,  // ← initially all show karo
+      ));
     } catch (e) {
       emit(HomeError(e.toString()));
     }
@@ -37,5 +41,29 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       ) async {
     await HistoryService.clearAll();
     add(const HomeLoadEvent());
+  }
+
+  // ── Search ────────────────────────────────────────────────────
+  Future<void> _onSearch(
+      HomeSearchEvent event,
+      Emitter<HomeState> emit,
+      ) async {
+    final current = state;
+    if (current is! HomeLoaded) return;
+
+    final query    = event.query.toLowerCase().trim();
+    final filtered = query.isEmpty
+        ? current.history
+        : current.history.where((item) =>
+    item.label.toLowerCase().contains(query) ||
+        item.type.toLowerCase().contains(query)  ||
+        item.data.toLowerCase().contains(query),
+    ).toList();
+
+    emit(HomeLoaded(
+      history:     current.history,
+      filtered:    filtered,
+      searchQuery: query,
+    ));
   }
 }

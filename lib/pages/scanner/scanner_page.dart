@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../providers/scanner_provider.dart';
 
 class QRScannerPage extends StatefulWidget {
   const QRScannerPage({super.key});
@@ -16,21 +18,18 @@ class _QRScannerPageState extends State<QRScannerPage>
     with SingleTickerProviderStateMixin {
 
   final MobileScannerController _controller = MobileScannerController();
-
-  String?  _scannedValue;
-  String?  _scannedType;
-  bool     _torchOn      = false;
-  bool     _paused       = false;
-  bool     _pickingImage = false;
+  bool _pickingImage = false;
 
   // Scan line animation
   late final AnimationController _lineCtrl = AnimationController(
-    vsync: this,
+    vsync:    this,
     duration: const Duration(seconds: 2),
   )..repeat(reverse: true);
 
   late final Animation<double> _line =
   CurvedAnimation(parent: _lineCtrl, curve: Curves.easeInOut);
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
   void dispose() {
@@ -39,41 +38,19 @@ class _QRScannerPageState extends State<QRScannerPage>
     super.dispose();
   }
 
+  // ── Scan detect ────────────────────────────────────────────────────────────
+
   void _onDetect(BarcodeCapture capture) {
-    if (_paused) return;
+    final provider = context.read<ScannerProvider>();
+    if (provider.status == ScannerStatus.success) return;
     final value = capture.barcodes.first.rawValue;
     if (value == null) return;
-    setState(() {
-      _paused       = true;
-      _scannedValue = value;
-      _scannedType  = _detectType(value);
-    });
+    provider.codeDetected(value);
     _controller.stop();
     _showResultSheet(value);
   }
 
-  String _detectType(String value) {
-    if (value.startsWith('https://wa.me') ||
-        value.contains('api.whatsapp'))    return 'WhatsApp';
-    if (value.startsWith('http'))          return 'Website';
-    if (value.startsWith('tel:'))          return 'Phone';
-    if (value.startsWith('mailto:'))       return 'Email';
-    if (value.startsWith('WIFI:'))         return 'WiFi';
-    if (value.startsWith('geo:'))          return 'Location';
-    if (value.startsWith('MECARD:') ||
-        value.startsWith('BEGIN:VCARD'))   return 'Contact';
-    if (value.startsWith('sms:'))          return 'SMS';
-    return 'Text';
-  }
-
-  void _rescan() {
-    setState(() {
-      _paused       = false;
-      _scannedValue = null;
-      _scannedType  = null;
-    });
-    _controller.start();
-  }
+  // ── Gallery pick ───────────────────────────────────────────────────────────
 
   Future<void> _pickFromGallery() async {
     setState(() => _pickingImage = true);
@@ -88,11 +65,7 @@ class _QRScannerPageState extends State<QRScannerPage>
       }
       final value = result.barcodes.first.rawValue;
       if (value == null) return;
-      setState(() {
-        _paused       = true;
-        _scannedValue = value;
-        _scannedType  = _detectType(value);
-      });
+      context.read<ScannerProvider>().codeDetected(value);
       _showResultSheet(value);
     } catch (_) {
       _snack('Could not read QR code');
@@ -101,6 +74,22 @@ class _QRScannerPageState extends State<QRScannerPage>
     }
   }
 
+  // ── Rescan ─────────────────────────────────────────────────────────────────
+
+  void _rescan() {
+    context.read<ScannerProvider>().reset();
+    _controller.start();
+  }
+
+  // ── Torch ──────────────────────────────────────────────────────────────────
+
+  void _toggleTorch() {
+    context.read<ScannerProvider>().toggleTorch();
+    _controller.toggleTorch();
+  }
+
+  // ── Snack ──────────────────────────────────────────────────────────────────
+
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
@@ -108,10 +97,12 @@ class _QRScannerPageState extends State<QRScannerPage>
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10)),
-      margin: const EdgeInsets.all(16),
+      margin:   const EdgeInsets.all(16),
       duration: const Duration(seconds: 2),
     ));
   }
+
+  // ── Open link ──────────────────────────────────────────────────────────────
 
   Future<void> _openLink(String value) async {
     final uri = Uri.tryParse(value);
@@ -123,20 +114,65 @@ class _QRScannerPageState extends State<QRScannerPage>
     }
   }
 
+  // ── Type helpers ───────────────────────────────────────────────────────────
+
+  String _detectType(String value) {
+    if (value.startsWith('https://wa.me') ||
+        value.contains('api.whatsapp'))  return 'WhatsApp';
+    if (value.startsWith('http'))        return 'Website';
+    if (value.startsWith('tel:'))        return 'Phone';
+    if (value.startsWith('mailto:'))     return 'Email';
+    if (value.startsWith('WIFI:'))       return 'WiFi';
+    if (value.startsWith('geo:'))        return 'Location';
+    if (value.startsWith('MECARD:') ||
+        value.startsWith('BEGIN:VCARD')) return 'Contact';
+    if (value.startsWith('sms:'))        return 'SMS';
+    return 'Text';
+  }
+
+  Color _typeColor(String type) {
+    switch (type) {
+      case 'Website':  return const Color(0xFF4C9BE8);
+      case 'WhatsApp': return const Color(0xFF25D366);
+      case 'Phone':    return const Color(0xFFFF6B35);
+      case 'Email':    return const Color(0xFFE85D75);
+      case 'WiFi':     return const Color(0xFF9B59B6);
+      case 'Location': return const Color(0xFF1ABC9C);
+      case 'Contact':  return const Color(0xFFFF8C42);
+      case 'SMS':      return const Color(0xFFFFB800);
+      default:         return const Color(0xFF95A5A6);
+    }
+  }
+
+  IconData _typeIcon(String type) {
+    switch (type) {
+      case 'Website':  return Icons.language_rounded;
+      case 'WhatsApp': return Icons.chat_rounded;
+      case 'Phone':    return Icons.phone_rounded;
+      case 'Email':    return Icons.mail_rounded;
+      case 'WiFi':     return Icons.wifi_rounded;
+      case 'Location': return Icons.location_on_rounded;
+      case 'Contact':  return Icons.person_rounded;
+      case 'SMS':      return Icons.sms_rounded;
+      default:         return Icons.notes_rounded;
+    }
+  }
+
+  // ── Result bottom sheet ────────────────────────────────────────────────────
+
   void _showResultSheet(String value) {
     final type  = _detectType(value);
     final color = _typeColor(type);
     final icon  = _typeIcon(type);
 
     showModalBottomSheet(
-      context:           context,
+      context:            context,
       isScrollControlled: true,
-      backgroundColor:   Colors.transparent,
+      backgroundColor:    Colors.transparent,
       builder: (_) => Container(
         decoration: const BoxDecoration(
           color:        Color(0xFF1A1A2E),
-          borderRadius: BorderRadius.vertical(
-              top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         child: Column(
@@ -176,8 +212,8 @@ class _QRScannerPageState extends State<QRScannerPage>
                       )),
                   const Text('Scanned successfully',
                       style: TextStyle(
-                        color:    Colors.white,
-                        fontSize: 15,
+                        color:      Colors.white,
+                        fontSize:   15,
                         fontWeight: FontWeight.w700,
                       )),
                 ],
@@ -268,7 +304,7 @@ class _QRScannerPageState extends State<QRScannerPage>
 
             const SizedBox(height: 12),
 
-            // Scan again
+            // Scan again button
             SizedBox(
               width:  double.infinity,
               height: 48,
@@ -298,37 +334,12 @@ class _QRScannerPageState extends State<QRScannerPage>
     ).whenComplete(_rescan);
   }
 
-  Color _typeColor(String type) {
-    switch (type) {
-      case 'Website':  return const Color(0xFF4C9BE8);
-      case 'WhatsApp': return const Color(0xFF25D366);
-      case 'Phone':    return const Color(0xFFFF6B35);
-      case 'Email':    return const Color(0xFFE85D75);
-      case 'WiFi':     return const Color(0xFF9B59B6);
-      case 'Location': return const Color(0xFF1ABC9C);
-      case 'Contact':  return const Color(0xFFFF8C42);
-      case 'SMS':      return const Color(0xFFFFB800);
-      default:         return const Color(0xFF95A5A6);
-    }
-  }
-
-  IconData _typeIcon(String type) {
-    switch (type) {
-      case 'Website':  return Icons.language_rounded;
-      case 'WhatsApp': return Icons.chat_rounded;
-      case 'Phone':    return Icons.phone_rounded;
-      case 'Email':    return Icons.mail_rounded;
-      case 'WiFi':     return Icons.wifi_rounded;
-      case 'Location': return Icons.location_on_rounded;
-      case 'Contact':  return Icons.person_rounded;
-      case 'SMS':      return Icons.sms_rounded;
-      default:         return Icons.notes_rounded;
-    }
-  }
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+    final torchOn = context.select<ScannerProvider, bool>(
+            (p) => p.torchOn);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D1A),
@@ -343,11 +354,9 @@ class _QRScannerPageState extends State<QRScannerPage>
             ),
           ),
 
-          // ── Dark overlay outside scan frame ────────────────────────────
+          // ── Dark overlay ───────────────────────────────────────────────
           Positioned.fill(
-            child: CustomPaint(
-              painter: _OverlayPainter(),
-            ),
+            child: CustomPaint(painter: _OverlayPainter()),
           ),
 
           // ── Scan frame corners ─────────────────────────────────────────
@@ -355,9 +364,7 @@ class _QRScannerPageState extends State<QRScannerPage>
             child: SizedBox(
               width:  260,
               height: 260,
-              child:  CustomPaint(
-                painter: _CornerPainter(),
-              ),
+              child:  CustomPaint(painter: _CornerPainter()),
             ),
           ),
 
@@ -371,20 +378,18 @@ class _QRScannerPageState extends State<QRScannerPage>
                   width:  220,
                   height: 2,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.transparent,
-                        const Color(0xFF25D366).withValues(alpha: 0.8),
-                        const Color(0xFF25D366),
-                        const Color(0xFF25D366).withValues(alpha: 0.8),
-                        Colors.transparent,
-                      ],
-                    ),
+                    gradient: LinearGradient(colors: [
+                      Colors.transparent,
+                      const Color(0xFF25D366).withValues(alpha: 0.8),
+                      const Color(0xFF25D366),
+                      const Color(0xFF25D366).withValues(alpha: 0.8),
+                      Colors.transparent,
+                    ]),
                     boxShadow: [
                       BoxShadow(
-                        color:      const Color(0xFF25D366)
+                        color:        const Color(0xFF25D366)
                             .withValues(alpha: 0.5),
-                        blurRadius: 8,
+                        blurRadius:   8,
                         spreadRadius: 2,
                       ),
                     ],
@@ -402,33 +407,22 @@ class _QRScannerPageState extends State<QRScannerPage>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-
-                  // Back button
                   _TopBtn(
                     icon:  Icons.arrow_back_rounded,
                     onTap: () => Navigator.maybePop(context),
                   ),
-
-                  // Title
-                  const Text(
-                    'Scan QR Code',
-                    style: TextStyle(
-                      color:      Colors.white,
-                      fontSize:   17,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-
-                  // Torch button
+                  const Text('Scan QR Code',
+                      style: TextStyle(
+                        color:      Colors.white,
+                        fontSize:   17,
+                        fontWeight: FontWeight.w700,
+                      )),
                   _TopBtn(
-                    icon:  _torchOn
+                    icon:   torchOn
                         ? Icons.flash_on_rounded
                         : Icons.flash_off_rounded,
-                    onTap: () {
-                      setState(() => _torchOn = !_torchOn);
-                      _controller.toggleTorch();
-                    },
-                    active: _torchOn,
+                    onTap:  _toggleTorch,
+                    active: torchOn,
                   ),
                 ],
               ),
@@ -444,8 +438,6 @@ class _QRScannerPageState extends State<QRScannerPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-
-                  // Hint text
                   const Text(
                     'Point your camera at a QR code',
                     style: TextStyle(
@@ -455,13 +447,9 @@ class _QRScannerPageState extends State<QRScannerPage>
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // Gallery + Auto Scan buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-
-                      // Gallery button
                       _BottomBtn(
                         icon:    Icons.image_rounded,
                         label:   'Gallery',
@@ -469,10 +457,7 @@ class _QRScannerPageState extends State<QRScannerPage>
                         loading: _pickingImage,
                         onTap:   _pickFromGallery,
                       ),
-
                       const SizedBox(width: 24),
-
-                      // Auto Scan button
                       _BottomBtn(
                         icon:   Icons.qr_code_scanner_rounded,
                         label:  'Auto Scan',
@@ -481,7 +466,6 @@ class _QRScannerPageState extends State<QRScannerPage>
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 32),
                 ],
               ),
@@ -638,17 +622,16 @@ class _OverlayPainter extends CustomPainter {
       ..color = Colors.black.withValues(alpha: 0.55);
 
     const frameSize = 260.0;
-    final cx = size.width  / 2;
-    final cy = size.height / 2;
+    final cx     = size.width  / 2;
+    final cy     = size.height / 2;
     final left   = cx - frameSize / 2;
     final top    = cy - frameSize / 2;
     final right  = cx + frameSize / 2;
     final bottom = cy + frameSize / 2;
 
-    // Draw 4 dark rectangles around the frame
-    canvas.drawRect(Rect.fromLTRB(0, 0, size.width, top), paint);
+    canvas.drawRect(Rect.fromLTRB(0, 0, size.width, top),          paint);
     canvas.drawRect(Rect.fromLTRB(0, bottom, size.width, size.height), paint);
-    canvas.drawRect(Rect.fromLTRB(0, top, left, bottom), paint);
+    canvas.drawRect(Rect.fromLTRB(0, top, left, bottom),           paint);
     canvas.drawRect(Rect.fromLTRB(right, top, size.width, bottom), paint);
   }
 
@@ -672,33 +655,21 @@ class _CornerPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    // Top-left corner
     canvas.drawPath(Path()
-      ..moveTo(0 + radius, 0)
-      ..lineTo(len, 0)
-      ..moveTo(0, 0 + radius)
-      ..lineTo(0, len), paint);
+      ..moveTo(0 + radius, 0)..lineTo(len, 0)
+      ..moveTo(0, 0 + radius)..lineTo(0, len), paint);
 
-    // Top-right corner
     canvas.drawPath(Path()
-      ..moveTo(w - len, 0)
-      ..lineTo(w - radius, 0)
-      ..moveTo(w, 0 + radius)
-      ..lineTo(w, len), paint);
+      ..moveTo(w - len, 0)..lineTo(w - radius, 0)
+      ..moveTo(w, 0 + radius)..lineTo(w, len), paint);
 
-    // Bottom-left corner
     canvas.drawPath(Path()
-      ..moveTo(0, h - len)
-      ..lineTo(0, h - radius)
-      ..moveTo(0 + radius, h)
-      ..lineTo(len, h), paint);
+      ..moveTo(0, h - len)..lineTo(0, h - radius)
+      ..moveTo(0 + radius, h)..lineTo(len, h), paint);
 
-    // Bottom-right corner
     canvas.drawPath(Path()
-      ..moveTo(w - len, h)
-      ..lineTo(w - radius, h)
-      ..moveTo(w, h - len)
-      ..lineTo(w, h - radius), paint);
+      ..moveTo(w - len, h)..lineTo(w - radius, h)
+      ..moveTo(w, h - len)..lineTo(w, h - radius), paint);
   }
 
   @override

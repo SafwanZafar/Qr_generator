@@ -9,15 +9,16 @@ import '../../bloc/home/home_event.dart';
 import '../../bloc/home/home_state.dart';
 import '../../core/theme.dart';
 
-
 class HomePage extends StatelessWidget {
   final VoidCallback onGenerate;
   final VoidCallback onScan;
+  final VoidCallback onMyCodes;
 
   const HomePage({
     super.key,
     required this.onGenerate,
     required this.onScan,
+    required this.onMyCodes,
   });
 
   @override
@@ -40,24 +41,32 @@ class HomePage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
 
-                        // Header
-                        const WelcomeHeader(),
+                        // ── Header ──────────────────────────────
+                        BlocBuilder<HomeBloc, HomeState>(
+                          builder: (context, state) {
+                            return WelcomeHeader(
+                              onSearch: (query) => context
+                                  .read<HomeBloc>()
+                                  .add(HomeSearchEvent(query)),
+                            );
+                          },
+                        ),
                         const SizedBox(height: 20),
 
-                        // Banner
+                        // ── Banner ───────────────────────────────
                         QuickActionBanner(onTap: onGenerate),
                         const SizedBox(height: 20),
 
-                        // Action grid
+                        // ── Action grid ──────────────────────────
                         ActionGrid(
                           onGenerate:  onGenerate,
                           onScan:      onScan,
                           onTemplates: () {},
-                          onMyCodes:   () {},
+                          onMyCodes:   onMyCodes,
                         ),
                         const SizedBox(height: 24),
 
-                        // Recent list
+                        // ── Recent list ──────────────────────────
                         BlocBuilder<HomeBloc, HomeState>(
                           builder: (context, state) {
                             if (state is HomeLoading) {
@@ -70,6 +79,8 @@ class HomePage extends StatelessWidget {
                             if (state is HomeLoaded) {
                               return RecentList(
                                 history:  state.history,
+                                filtered:    state.filtered,    // ← ADD
+                                searchQuery: state.searchQuery, // ← ADD
                                 onDelete: (id) => context
                                     .read<HomeBloc>()
                                     .add(HomeDeleteHistoryEvent(id)),

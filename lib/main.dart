@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'pages/onboarding/onboarding_page.dart';
 import 'pages/main_page.dart';
+import 'providers/generator_provider.dart';
+import 'providers/customize_provider.dart';
+import 'providers/scanner_provider.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: binding);
+
   final prefs = await SharedPreferences.getInstance();
   final done  = prefs.getBool('onboarding_done') ?? false;
+
+  FlutterNativeSplash.remove();
+
   runApp(MyApp(showOnboarding: !done));
 }
 
@@ -16,12 +26,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'QR Generator',
-      home: showOnboarding
-          ? const OnboardingPage()
-          : const MainPage(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => GeneratorProvider()),
+        ChangeNotifierProvider(create: (_) => CustomizeProvider()),
+        ChangeNotifierProvider(create: (_) => ScannerProvider()),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'QRCraft',
+        home: showOnboarding
+            ? const OnboardingPage()
+            : const MainPage(),
+      ),
     );
   }
 }

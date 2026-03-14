@@ -20,3 +20,11 @@ class HomeDeleteHistoryEvent extends HomeEvent {
 class HomeClearHistoryEvent extends HomeEvent {
   const HomeClearHistoryEvent();
 }
+
+// ── Search event ──────────────────────────────────────────────
+class HomeSearchEvent extends HomeEvent {
+  final String query;
+  const HomeSearchEvent(this.query);
+  @override
+  List<Object?> get props => [query];
+}
