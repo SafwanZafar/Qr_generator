@@ -11,10 +11,8 @@ import '../../providers/customize_provider.dart';
 import '../../services/gallery_services.dart';
 import '../../services/share_services.dart';
 import '../pages/customize/customize_screen.dart';
-import '../services/history_service.dart';
 
 class ResultPage extends StatefulWidget {
-  final String                  historyId;      // ← ADD
   final String                  qrData;
   final Color                   color;
   final IconData                icon;
@@ -23,7 +21,6 @@ class ResultPage extends StatefulWidget {
   final void Function(QRConfig) onConfigChanged;
 
   const ResultPage({
-    required this.historyId,      // ← ADD
     super.key,
     required this.qrData,
     required this.color,
@@ -38,24 +35,17 @@ class ResultPage extends StatefulWidget {
 }
 
 class _ResultPageState extends State<ResultPage> {
-  final GlobalKey _qrKey  = GlobalKey();
+  final GlobalKey _qrKey   = GlobalKey();
   bool            _saving  = false;
   bool            _sharing = false;
-  bool            _bookmarked = false;  // ← ADD
-
-
-  // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    // load initial config into CustomizeProvider
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CustomizeProvider>().loadConfig(widget.config);
     });
   }
-
-  // ── Title ──────────────────────────────────────────────────────────────────
 
   String get _title => switch (widget.label) {
     'URL'      => 'My Website QR',
@@ -70,8 +60,6 @@ class _ResultPageState extends State<ResultPage> {
     _          => 'My QR Code',
   };
 
-  // ── Capture ────────────────────────────────────────────────────────────────
-
   Future<Uint8List?> _capture() async {
     try {
       final boundary = _qrKey.currentContext!
@@ -84,16 +72,6 @@ class _ResultPageState extends State<ResultPage> {
       return null;
     }
   }
-
-  // ----history ----------------
-
-  Future<void> _bookmark() async {
-    await HistoryService.toggleBookmark(widget.historyId);
-    setState(() => _bookmarked = !_bookmarked);
-    _snack(_bookmarked ? 'Bookmarked!' : 'Bookmark removed');
-  }
-
-  // ── Save ───────────────────────────────────────────────────────────────────
 
   Future<void> _save() async {
     if (_saving) return;
@@ -111,8 +89,6 @@ class _ResultPageState extends State<ResultPage> {
     }
   }
 
-  // ── Share ──────────────────────────────────────────────────────────────────
-
   Future<void> _share() async {
     if (_sharing) return;
     setState(() => _sharing = true);
@@ -126,8 +102,6 @@ class _ResultPageState extends State<ResultPage> {
       if (mounted) setState(() => _sharing = false);
     }
   }
-
-  // ── Customize ──────────────────────────────────────────────────────────────
 
   void _customize() {
     final currentConfig = context.read<CustomizeProvider>().config;
@@ -148,8 +122,6 @@ class _ResultPageState extends State<ResultPage> {
       ),
     );
   }
-
-  // ── Snack ──────────────────────────────────────────────────────────────────
 
   void _snack(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -174,17 +146,12 @@ class _ResultPageState extends State<ResultPage> {
     ));
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
-    // only watch config from provider
     final config = context.watch<CustomizeProvider>().config;
 
     return Scaffold(
       backgroundColor: AppTheme.kBgColor,
-
-      // ── AppBar ─────────────────────────────────────────────────────
       appBar: AppBar(
         backgroundColor:       AppTheme.kBgColor,
         elevation:              0,
@@ -209,17 +176,12 @@ class _ResultPageState extends State<ResultPage> {
               fontWeight: FontWeight.w700,
             )),
       ),
-
-      // ── Body ───────────────────────────────────────────────────────
       body: Column(
         children: [
-
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               child: Column(children: [
-
-                // ── QR Card ──────────────────────────────────────────
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
@@ -253,10 +215,10 @@ class _ResultPageState extends State<ResultPage> {
                           ),
                           child: Center(
                             child: QrImageView(
-                              data:                widget.qrData,
-                              version:             QrVersions.auto,
-                              size:                220,
-                              backgroundColor:     config.backgroundColor,
+                              data:                 widget.qrData,
+                              version:              QrVersions.auto,
+                              size:                 220,
+                              backgroundColor:      config.backgroundColor,
                               errorCorrectionLevel: QrErrorCorrectLevel.H,
                               eyeStyle: QrEyeStyle(
                                 eyeShape: QrEyeShape.square,
@@ -309,7 +271,7 @@ class _ResultPageState extends State<ResultPage> {
 
                     const SizedBox(height: 24),
 
-                    // Action buttons
+                    // Action buttons — 3 only
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Row(
@@ -332,13 +294,6 @@ class _ResultPageState extends State<ResultPage> {
                             onTap:   _save,
                           ),
                           _CircleAction(
-                            icon:  Icons.bookmark_rounded,
-                            label: 'Bookmark',
-                            color: const Color(0xFFE84C4C),
-                            bg:    const Color(0xFFFFEEEE),
-                            onTap: _bookmark,
-                          ),
-                          _CircleAction(
                             icon:  Icons.palette_rounded,
                             label: 'Customize',
                             color: widget.color,
@@ -356,7 +311,7 @@ class _ResultPageState extends State<ResultPage> {
             ),
           ),
 
-          // ── Bottom button ───────────────────────────────────────────
+          // Bottom button
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
             child: SizedBox(
@@ -380,14 +335,11 @@ class _ResultPageState extends State<ResultPage> {
               ),
             ),
           ),
-
         ],
       ),
     );
   }
 }
-
-// ── Circle action button ──────────────────────────────────────────────────────
 
 class _CircleAction extends StatelessWidget {
   final IconData     icon;

@@ -13,12 +13,17 @@ class HomePage extends StatelessWidget {
   final VoidCallback onGenerate;
   final VoidCallback onScan;
   final VoidCallback onMyCodes;
+  final VoidCallback onTemplates;  // ← ADD
+  final VoidCallback onSeeAll;     // ← ADD
 
   const HomePage({
     super.key,
     required this.onGenerate,
     required this.onScan,
     required this.onMyCodes,
+    required this.onTemplates,  // ← ADD
+    required this.onSeeAll,     // ← ADD
+
   });
 
   @override
@@ -42,15 +47,7 @@ class HomePage extends StatelessWidget {
                       children: [
 
                         // ── Header ──────────────────────────────
-                        BlocBuilder<HomeBloc, HomeState>(
-                          builder: (context, state) {
-                            return WelcomeHeader(
-                              onSearch: (query) => context
-                                  .read<HomeBloc>()
-                                  .add(HomeSearchEvent(query)),
-                            );
-                          },
-                        ),
+                        const WelcomeHeader(),
                         const SizedBox(height: 20),
 
                         // ── Banner ───────────────────────────────
@@ -61,7 +58,7 @@ class HomePage extends StatelessWidget {
                         ActionGrid(
                           onGenerate:  onGenerate,
                           onScan:      onScan,
-                          onTemplates: () {},
+                          onTemplates: onTemplates,
                           onMyCodes:   onMyCodes,
                         ),
                         const SizedBox(height: 24),
@@ -79,12 +76,10 @@ class HomePage extends StatelessWidget {
                             if (state is HomeLoaded) {
                               return RecentList(
                                 history:  state.history,
-                                filtered:    state.filtered,    // ← ADD
-                                searchQuery: state.searchQuery, // ← ADD
                                 onDelete: (id) => context
                                     .read<HomeBloc>()
                                     .add(HomeDeleteHistoryEvent(id)),
-                                onSeeAll: () {},
+                                onSeeAll:onSeeAll,
                               );
                             }
                             return const SizedBox();

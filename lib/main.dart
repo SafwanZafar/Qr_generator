@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_code_generator/providers/navigation_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'pages/onboarding/onboarding_page.dart';
 import 'pages/main_page.dart';
@@ -31,7 +32,10 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => GeneratorProvider()),
         ChangeNotifierProvider(create: (_) => CustomizeProvider()),
         ChangeNotifierProvider(create: (_) => ScannerProvider()),
+        ChangeNotifierProvider(create: (_) => NavigationProvider()),  // ← ADD
+
       ],
+
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'QRCraft',

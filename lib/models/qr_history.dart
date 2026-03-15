@@ -7,7 +7,6 @@ class QRHistory extends Equatable {
   final String   data;
   final String   label;
   final DateTime createdAt;
-  final bool     isBookmarked;
 
   const QRHistory({
     required this.id,
@@ -15,7 +14,6 @@ class QRHistory extends Equatable {
     required this.data,
     required this.label,
     required this.createdAt,
-    this.isBookmarked = false,
   });
 
   QRHistory copyWith({
@@ -24,33 +22,29 @@ class QRHistory extends Equatable {
     String?   data,
     String?   label,
     DateTime? createdAt,
-    bool?     isBookmarked,
   }) =>
       QRHistory(
-        id:           id           ?? this.id,
-        type:         type         ?? this.type,
-        data:         data         ?? this.data,
-        label:        label        ?? this.label,
-        createdAt:    createdAt    ?? this.createdAt,
-        isBookmarked: isBookmarked ?? this.isBookmarked,
+        id:        id        ?? this.id,
+        type:      type      ?? this.type,
+        data:      data      ?? this.data,
+        label:     label     ?? this.label,
+        createdAt: createdAt ?? this.createdAt,
       );
 
   Map<String, dynamic> toMap() => {
-    'id':           id,
-    'type':         type,
-    'data':         data,
-    'label':        label,
-    'createdAt':    createdAt.toIso8601String(),
-    'isBookmarked': isBookmarked,
+    'id':        id,
+    'type':      type,
+    'data':      data,
+    'label':     label,
+    'createdAt': createdAt.toIso8601String(),
   };
 
   factory QRHistory.fromMap(Map<String, dynamic> map) => QRHistory(
-    id:           map['id'],
-    type:         map['type'],
-    data:         map['data'],
-    label:        map['label'],
-    createdAt:    DateTime.parse(map['createdAt']),
-    isBookmarked: map['isBookmarked'] ?? false,
+    id:        map['id'],
+    type:      map['type'],
+    data:      map['data'],
+    label:     map['label'],
+    createdAt: DateTime.parse(map['createdAt']),
   );
 
   String toJson() => jsonEncode(toMap());
@@ -67,5 +61,5 @@ class QRHistory extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, type, data, label, createdAt, isBookmarked];
+  List<Object?> get props => [id, type, data, label, createdAt];
 }

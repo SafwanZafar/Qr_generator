@@ -1,89 +1,56 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:qr_code_generator/pages/generator/generator_page.dart';
 import 'package:qr_code_generator/pages/saved/save_page.dart';
 import 'package:qr_code_generator/pages/scanner/scanner_page.dart';
 import 'package:qr_code_generator/pages/template/template_page.dart';
 import '../core/theme.dart';
 import '../models/qr_config.dart';
+import '../providers/generator_provider.dart';
+import '../providers/navigation_provider.dart';
 import 'home/home_page.dart';
 
-class MainPage extends StatefulWidget {
+class MainPage extends StatelessWidget {
   const MainPage({super.key});
 
   @override
-  State<MainPage> createState() => _MainPageState();
-}
-
-class _MainPageState extends State<MainPage> {
-  int      _index          = 0;
-  int      _savedRefresh   = 0;   // ← forces SavedPage rebuild
-  QRConfig _selectedConfig = const QRConfig();
-
-  void _goToGenerator() => setState(() => _index = 1);
-  void _goToScanner()   => setState(() => _index = 2);
-
-  void _onTemplateApply(QRConfig config) {
-    setState(() {
-      _selectedConfig = config;
-      _index          = 1;
-    });
-  }
-
-  void _onQRGenerated() {
-    // called after QR is generated — refresh saved page
-    setState(() => _savedRefresh++);
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final nav          = context.watch<NavigationProvider>();
+    final index        = nav.index;
+    final savedRefresh = nav.savedRefresh;
+
     return Scaffold(
       backgroundColor: AppTheme.kBgColor,
       body: IndexedStack(
-        index: _index,
+        index: index,
         children: [
-          HomePage(                              // 0 - Home
-            onGenerate: _goToGenerator,
-            onScan:     _goToScanner, onMyCodes: () {  },
+          HomePage(
+            onGenerate:  () => context.read<NavigationProvider>().goToGenerator(),
+            onScan:      () => context.read<NavigationProvider>().goToScanner(),
+            onMyCodes:   () => context.read<NavigationProvider>().goToSaved(),
+            onTemplates: () => context.read<NavigationProvider>().goToTemplates(),
+            onSeeAll:    () => context.read<NavigationProvider>().goToSaved(),
           ),
-          QRGeneratorPage(                       // 1 - Create
-            initialConfig:  _selectedConfig,
-            onQRGenerated:  _onQRGenerated,      // ← notify main
+          QRGeneratorPage(
+            initialConfig: const QRConfig(),
+            onQRGenerated: () =>
+                context.read<NavigationProvider>().refreshSaved(),
           ),
-          const QRScannerPage(),                 // 2 - Scan
-          SavedPage(key: ValueKey(_savedRefresh)), // 3 - Saved
-          TemplatePage(                          // 4 - Templates
+          const QRScannerPage(),
+          SavedPage(key: ValueKey(savedRefresh)),
+          TemplatePage(
             qrData:  'https://example.com',
-            onApply: _onTemplateApply,
+            onApply: (config) {
+    context.read<GeneratorProvider>().applyTemplate(config);
+    context.read<NavigationProvider>().goToGenerator();
+    },
           ),
         ],
       ),
       bottomNavigationBar: _BottomNav(
-        index: _index,
-        onTap: (i) {
-          setState(() {
-            _index = i;
-            if (i == 3) _savedRefresh++;  // ← also refresh on tab tap
-          });
-        },
-      ),
-    );
-  }
-}
-
-class _PlaceholderPage extends StatelessWidget {
-  final String label;
-  const _PlaceholderPage({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.kBgColor,
-      body: Center(
-        child: Text(label,
-            style: const TextStyle(
-              color:    AppTheme.kTextGray,
-              fontSize: 18,
-            )),
+        index: index,
+        onTap: (i) =>
+            context.read<NavigationProvider>().goTo(i),
       ),
     );
   }

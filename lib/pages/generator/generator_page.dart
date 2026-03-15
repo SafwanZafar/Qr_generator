@@ -152,7 +152,6 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
         context,
         MaterialPageRoute(
           builder: (_) => ResultPage(
-            historyId:       historyId,
             qrData:          provider.qrData,
             color:           item.color,
             icon:            item.icon,
